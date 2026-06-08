@@ -1,0 +1,348 @@
+openapi: 3.0.3
+
+info:
+  title: Demo SDLC Agent API
+  version: 1.0.0
+  description: >
+    WSO2 Agent Manager demo agent for software development lifecycle workflows.
+
+    This API exposes:
+    - GET /health for readiness checks
+    - POST /chat for interactive conversation with the SDLC agent
+    - POST /trigger for non-interactive one-shot mocked SDLC analysis
+
+    The agent performs demo analysis for release readiness, pull request review,
+    security/dependency risk, CI/CD health, test gaps, maintainability findings,
+    and recommended software engineering actions.
+
+servers:
+  - url: /
+
+tags:
+  - name: Health
+    description: Runtime health and readiness
+  - name: Chat
+    description: Interactive SDLC agent chat
+  - name: Trigger
+    description: Non-interactive SDLC analysis trigger
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: >
+        Returns readiness information and basic runtime configuration for the
+        SDLC Copilot Agent.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Agent health response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                healthy:
+                  summary: Healthy governed deployment
+                  value:
+                    ok: true
+                    name: sdlc-copilot-agent
+                    model: gpt-4o
+                    governed: true
+                    port: 8000
+                    endpoints:
+                      chat: POST /chat
+                      trigger: POST /trigger
+                      health: GET /health
+
+  /chat:
+    post:
+      tags:
+        - Chat
+      summary: Chat with the SDLC agent
+      description: >
+        Interactive chat endpoint.
+
+        This endpoint follows the standard WSO2 Agent Manager chat-style contract:
+        request body contains message, session_id, and optional context; response
+        body contains response.
+
+        The agent can answer SDLC questions and run mocked analysis for:
+        release readiness, pull request review, security review, test coverage
+        gaps, CI/CD health, maintainability, and operational readiness.
+      operationId: chatWithSdlcAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+            examples:
+              releaseReadiness:
+                summary: Release readiness review
+                value:
+                  message: Run a release readiness review for checkout-service.
+                  session_id: agent-manager-demo-1
+                  context:
+                    source: agent-manager
+              prReview:
+                summary: Pull request review
+                value:
+                  message: >
+                    Review this PR for checkout-service. The change adds retry
+                    logic around payment-provider timeouts and modifies the
+                    receipt-worker queue visibility timeout.
+                  session_id: pr-review-demo-1
+                  context:
+                    workflow: pull_request_review
+              securityReview:
+                summary: Security review
+                value:
+                  message: Check the security and dependency risk for checkout-service.
+                  session_id: security-demo-1
+                  context:
+                    workflow: security_review
+      responses:
+        "200":
+          description: Agent chat response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+              examples:
+                response:
+                  summary: Chat response
+                  value:
+                    response: >
+                      Decision: CONDITIONAL. The mocked release-readiness analysis
+                      found one high-risk test gap and medium security and
+                      maintainability risks.
+        "422":
+          description: Invalid request body
+
+  /trigger:
+    post:
+      tags:
+        - Trigger
+      summary: Trigger a one-shot SDLC analysis
+      description: >
+        Non-interactive endpoint that triggers a mocked SDLC analysis and returns
+        the final answer immediately.
+
+        This is useful for event-driven demos where an external system triggers
+        the agent, such as:
+        - pull request opened
+        - release candidate created
+        - nightly SDLC audit
+        - security gate execution
+        - deployment approval request
+
+        Set use_llm to false to return deterministic mocked analysis without
+        calling the governed LLM. Set use_llm to true to invoke the LangGraph
+        agent through the configured governed LLM provider.
+      operationId: triggerSdlcAnalysis
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerRequest"
+            examples:
+              deterministicReleaseReadiness:
+                summary: Deterministic release readiness analysis without LLM
+                value:
+                  repository_url: checkout-service
+                  branch: main
+                  analysis_type: release_readiness
+                  change_summary: Custom API Agent smoke test.
+                  use_llm: false
+              governedReleaseReadiness:
+                summary: Governed LLM release readiness analysis
+                value:
+                  repository_url: https://github.com/acme-payments/checkout-service
+                  branch: main
+                  analysis_type: release_readiness
+                  change_summary: Payment retry logic and receipt-worker queue timeout changes.
+                  use_llm: true
+              prReview:
+                summary: Pull request review trigger
+                value:
+                  repository_url: checkout-service
+                  branch: feature/payment-provider-retry
+                  analysis_type: pr_review
+                  change_summary: >
+                    This PR adds retry logic for payment-provider timeout errors
+                    and updates receipt-worker queue visibility timeout from 30s
+                    to 90s.
+                  use_llm: true
+              securityScan:
+                summary: Security scan trigger
+                value:
+                  repository_url: checkout-service
+                  branch: main
+                  analysis_type: security_scan
+                  change_summary: Nightly security gate for checkout-service.
+                  use_llm: true
+      responses:
+        "200":
+          description: Triggered SDLC analysis response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerResponse"
+              examples:
+                deterministicResponse:
+                  summary: Deterministic response
+                  value:
+                    analysis_id: mock-abc1234567
+                    analysis_type: release_readiness
+                    response: >
+                      Decision: CONDITIONAL with medium confidence.
+
+                      Mocked SDLC analysis for checkout-service on branch main.
+        "422":
+          description: Invalid request body
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - ok
+        - name
+        - model
+        - governed
+        - port
+        - endpoints
+      properties:
+        ok:
+          type: boolean
+          description: Whether the application is running.
+          example: true
+        name:
+          type: string
+          description: Agent runtime name.
+          example: sdlc-copilot-agent
+        model:
+          type: string
+          description: Configured chat model name.
+          example: gpt-4o
+        governed:
+          type: boolean
+          description: Whether the app detected governed LLM mode through OPENAI_URL.
+          example: true
+        port:
+          type: integer
+          description: Port the application reports as configured.
+          example: 8000
+        endpoints:
+          type: object
+          additionalProperties:
+            type: string
+          description: Endpoint summary.
+          example:
+            chat: POST /chat
+            trigger: POST /trigger
+            health: GET /health
+
+    ChatRequest:
+      type: object
+      required:
+        - message
+        - session_id
+      properties:
+        message:
+          type: string
+          description: User message to send to the SDLC agent.
+          minLength: 1
+          example: Run a release readiness review for checkout-service.
+        session_id:
+          type: string
+          description: >
+            Client-provided conversation ID. The agent stores recent in-memory
+            chat history by this value.
+          minLength: 1
+          example: agent-manager-demo-1
+        context:
+          type: object
+          description: Optional WSO2 Agent Manager or caller-provided context.
+          nullable: true
+          additionalProperties: true
+          example:
+            source: agent-manager
+            workflow: release_readiness
+
+    ChatResponse:
+      type: object
+      required:
+        - response
+      properties:
+        response:
+          type: string
+          description: Final response from the SDLC agent.
+          example: >
+            Decision: CONDITIONAL. The mocked release-readiness analysis found
+            one high-risk test gap and recommends adding integration tests before
+            approval.
+
+    TriggerRequest:
+      type: object
+      properties:
+        repository_url:
+          type: string
+          description: >
+            Repository URL or mocked repository name. Supported mocked values
+            include checkout-service and inventory-service.
+          default: https://github.com/acme-payments/checkout-service
+          example: checkout-service
+        branch:
+          type: string
+          description: Branch to analyze.
+          default: main
+          example: main
+        analysis_type:
+          type: string
+          description: Type of SDLC analysis to perform.
+          default: release_readiness
+          enum:
+            - release_readiness
+            - pr_review
+            - security_scan
+          example: release_readiness
+        change_summary:
+          type: string
+          nullable: true
+          description: Optional summary of the change or event being analyzed.
+          example: Payment retry logic and receipt-worker queue timeout changes.
+        use_llm:
+          type: boolean
+          description: >
+            If true, invoke the governed LLM through the LangGraph agent. If false,
+            return deterministic mocked analysis without an LLM call.
+          default: true
+          example: false
+
+    TriggerResponse:
+      type: object
+      required:
+        - analysis_id
+        - analysis_type
+        - response
+      properties:
+        analysis_id:
+          type: string
+          description: Deterministic mocked analysis ID.
+          example: mock-abc1234567
+        analysis_type:
+          type: string
+          description: Type of analysis that was executed.
+          example: release_readiness
+        response:
+          type: string
+          description: Final analysis response.
+          example: >
+            Decision: CONDITIONAL with medium confidence.
+
+            Mocked SDLC analysis for checkout-service on branch main.
