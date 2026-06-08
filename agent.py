@@ -53,7 +53,7 @@ from tools import LANGCHAIN_TOOLS, run_mocked_sdlc_analysis
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("sdlc-copilot")
 
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o").strip()
 MAX_SESSION_MESSAGES = 40
 
 FRIENDLY_FALLBACK = (
@@ -116,31 +116,34 @@ class TriggerResponse(BaseModel):
 
 
 def _resolve_llm_config() -> dict[str, Any]:
-    """Resolve LLM credentials for BYO and WSO2 Agent Manager governed modes.
-
-    Governed mode:
-        OPENAI_URL is present.
-        OPENAI_API_KEY is sent to the gateway as API-Key.
-        Authorization is blanked so the OpenAI SDK bearer token is not used.
-
-    BYO mode:
-        OPENAI_URL is absent.
-        OPENAI_API_KEY_DEFAULT is used directly with OpenAI.
-    """
+    """Resolve LLM credentials for BYO and WSO2 Agent Manager governed modes."""
 
     base_url = os.getenv("OPENAI_URL")
+    governed_api_key = os.getenv("OPENAI_API_KEY")
+    byo_api_key = os.getenv("OPENAI_API_KEY_DEFAULT")
 
     if base_url:
+        if not governed_api_key:
+            log.warning(
+                "OPENAI_URL is set but OPENAI_API_KEY is missing. "
+                "Governed LLM calls will fail with 401."
+            )
+
         return {
             "base_url": base_url,
-            "api_key": "unused",
+            "api_key": governed_api_key or "missing-api-key",
             "default_headers": {
-                "API-Key": os.getenv("OPENAI_API_KEY", ""),
-                "Authorization": "",
+                "API-Key": governed_api_key or "",
             },
         }
 
-    return {"api_key": os.getenv("OPENAI_API_KEY_DEFAULT")}
+    if not byo_api_key:
+        log.warning(
+            "OPENAI_URL is not set and OPENAI_API_KEY_DEFAULT is missing. "
+            "BYO LLM calls will fail."
+        )
+
+    return {"api_key": byo_api_key}
 
 
 def _get_agent():
