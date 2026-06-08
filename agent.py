@@ -116,34 +116,45 @@ class TriggerResponse(BaseModel):
 
 
 def _resolve_llm_config() -> dict[str, Any]:
-    """Resolve LLM credentials for BYO and WSO2 Agent Manager governed modes."""
+    """Resolve LLM credentials.
 
-    base_url = os.getenv("OPENAI_URL")
-    governed_api_key = os.getenv("OPENAI_API_KEY")
-    byo_api_key = os.getenv("OPENAI_API_KEY_DEFAULT")
+    Governed mode:
+        If OPENAI_URL is present, call the OpenAI-compatible governed endpoint.
+
+    Direct OpenAI mode:
+        If OPENAI_URL is absent, call OpenAI directly with OPENAI_API_KEY_DEFAULT.
+    """
+
+    base_url = (os.getenv("OPENAI_URL") or "").strip()
+    governed_api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    byo_api_key = (os.getenv("OPENAI_API_KEY_DEFAULT") or "").strip()
 
     if base_url:
         if not governed_api_key:
             log.warning(
                 "OPENAI_URL is set but OPENAI_API_KEY is missing. "
-                "Governed LLM calls will fail with 401."
+                "Governed LLM calls will fail."
             )
 
         return {
             "base_url": base_url,
             "api_key": governed_api_key or "missing-api-key",
             "default_headers": {
-                "API-Key": governed_api_key or "",
+                "X-API-Key": governed_api_key,
+                "API-Key": governed_api_key,
+                "x-api-key": governed_api_key,
             },
         }
 
     if not byo_api_key:
         log.warning(
             "OPENAI_URL is not set and OPENAI_API_KEY_DEFAULT is missing. "
-            "BYO LLM calls will fail."
+            "Direct OpenAI calls will fail."
         )
 
-    return {"api_key": byo_api_key}
+    return {
+        "api_key": byo_api_key or "missing-api-key",
+    }
 
 
 def _get_agent():
