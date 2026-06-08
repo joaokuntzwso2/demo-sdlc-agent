@@ -169,14 +169,18 @@ def _ready_payload() -> dict[str, Any]:
         "name": "sdlc-copilot-agent",
         "model": OPENAI_MODEL,
         "governed": bool(os.environ.get("OPENAI_URL")),
-        "port": int(os.environ.get("PORT", "8000")),
+        "port": 8000,
+        "llm_env": {
+            "OPENAI_URL_set": bool(os.environ.get("OPENAI_URL")),
+            "OPENAI_API_KEY_set": bool(os.environ.get("OPENAI_API_KEY")),
+            "OPENAI_API_KEY_DEFAULT_set": bool(os.environ.get("OPENAI_API_KEY_DEFAULT")),
+        },
         "endpoints": {
             "chat": "POST /chat",
             "trigger": "POST /trigger",
             "health": "GET /health",
         },
     }
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
