@@ -1,0 +1,219 @@
+openapi: 3.0.3
+info:
+  title: Demo SDLC Agent API
+  version: 1.0.0
+  description: WSO2 Agent Manager demo agent for software development lifecycle workflows. This API exposes health checks,
+    interactive chat, and event-triggered SDLC analysis for release readiness, pull request review, security/dependency risk,
+    CI/CD health, test gaps, maintainability findings, and recommended software engineering actions.
+servers:
+- url: http://localhost:8000
+  description: Local development server. Replace this with the deployed agent base URL when importing into WSO2/Bijira.
+tags:
+- name: Health
+  description: Runtime health and readiness endpoints.
+- name: Chat
+  description: Interactive SDLC agent chat endpoints.
+- name: Trigger
+  description: Non-interactive SDLC analysis trigger endpoints.
+paths:
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Health check
+      description: Returns readiness information and basic runtime configuration for the SDLC Copilot Agent.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Agent health response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /chat:
+    post:
+      tags:
+      - Chat
+      summary: Chat with the SDLC agent
+      description: Interactive chat endpoint. The request body contains a user message, a client-provided session ID, and optional context. The response body contains the final SDLC agent response.
+      operationId: chatWithSdlcAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: Agent chat response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '422':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /trigger:
+    post:
+      tags:
+      - Trigger
+      summary: Trigger a one-shot SDLC analysis
+      description: Non-interactive endpoint that triggers a mocked SDLC analysis and returns the final answer immediately. Set use_llm to false to return deterministic mocked analysis without calling the governed LLM. Set use_llm to true to invoke the LangGraph agent through the configured governed LLM provider.
+      operationId: triggerSdlcAnalysis
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerRequest'
+      responses:
+        '200':
+          description: Triggered SDLC analysis response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerResponse'
+        '422':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+      - ok
+      - name
+      - model
+      - governed
+      - port
+      - endpoints
+      properties:
+        ok:
+          type: boolean
+          description: Whether the application is running.
+          example: true
+        name:
+          type: string
+          description: Agent runtime name.
+          example: sdlc-copilot-agent
+        model:
+          type: string
+          description: Configured chat model name.
+          example: gpt-4o
+        governed:
+          type: boolean
+          description: Whether the app detected governed LLM mode through OPENAI_URL.
+          example: true
+        port:
+          type: integer
+          format: int32
+          description: Port the application reports as configured.
+          example: 8000
+        endpoints:
+          type: object
+          description: Endpoint summary.
+          additionalProperties:
+            type: string
+          example:
+            chat: POST /chat
+            trigger: POST /trigger
+            health: GET /health
+    ChatRequest:
+      type: object
+      required:
+      - message
+      - session_id
+      properties:
+        message:
+          type: string
+          description: User message to send to the SDLC agent.
+          minLength: 1
+          example: Run a release readiness review for checkout-service.
+        session_id:
+          type: string
+          description: Client-provided conversation ID. The agent stores recent in-memory chat history by this value.
+          minLength: 1
+          example: agent-manager-demo-1
+        context:
+          type: object
+          nullable: true
+          description: Optional WSO2 Agent Manager or caller-provided context.
+          additionalProperties: {}
+          example:
+            source: agent-manager
+            workflow: release_readiness
+    ChatResponse:
+      type: object
+      required:
+      - response
+      properties:
+        response:
+          type: string
+          description: Final response from the SDLC agent.
+          example: "Decision: CONDITIONAL. The mocked release-readiness analysis found one high-risk test gap and recommends adding integration tests before approval."
+    TriggerRequest:
+      type: object
+      properties:
+        repository_url:
+          type: string
+          description: Repository URL or mocked repository name. Supported mocked values include checkout-service and inventory-service.
+          default: https://github.com/acme-payments/checkout-service
+          example: checkout-service
+        branch:
+          type: string
+          description: Branch to analyze.
+          default: main
+          example: main
+        analysis_type:
+          type: string
+          description: Type of SDLC analysis to perform.
+          default: release_readiness
+          enum:
+          - release_readiness
+          - pr_review
+          - security_scan
+          example: release_readiness
+        change_summary:
+          type: string
+          nullable: true
+          description: Optional summary of the change or event being analyzed.
+          example: Payment retry logic and receipt-worker queue timeout changes.
+        use_llm:
+          type: boolean
+          description: If true, invoke the governed LLM through the LangGraph agent. If false, return deterministic mocked analysis without an LLM call.
+          default: true
+          example: false
+    TriggerResponse:
+      type: object
+      required:
+      - analysis_id
+      - analysis_type
+      - response
+      properties:
+        analysis_id:
+          type: string
+          description: Deterministic mocked analysis ID.
+          example: mock-abc1234567
+        analysis_type:
+          type: string
+          description: Type of analysis that was executed.
+          example: release_readiness
+        response:
+          type: string
+          description: Final analysis response.
+          example: "Decision: CONDITIONAL with medium confidence.\n\nMocked SDLC analysis for checkout-service on branch main."
+    ErrorResponse:
+      type: object
+      description: FastAPI validation error response.
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
